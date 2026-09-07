@@ -40,7 +40,7 @@ function getProp_(key, fallback) {
 function getConfig() {
   return {
     groqApiKey: getProp_('GROQ_API_KEY', ''),
-    groqModel: getProp_('GROQ_MODEL', 'llama-3.3-70b-versatile'),
+    groqModel: getProp_('GROQ_MODEL', 'openai/gpt-oss-20b'),
     hunterApiKey: getProp_('HUNTER_API_KEY', ''),
     businessName: getProp_('BUSINESS_NAME', 'AdSolutions'),
     physicalAddress: getProp_('PHYSICAL_ADDRESS', 'REPLACE_WITH_YOUR_MAILING_ADDRESS'),

@@ -29,7 +29,7 @@ function setupSheets() {
   const rows = [
     ['Key', 'Required?', 'What it is'],
     ['GROQ_API_KEY', 'Yes', 'Free key from console.groq.com (no card required) — sign in, go to API Keys, create key'],
-    ['GROQ_MODEL', 'No (default llama-3.3-70b-versatile)', 'Override if you want a different Groq model'],
+    ['GROQ_MODEL', 'No (default openai/gpt-oss-20b)', 'Override if you want a different Groq model'],
     ['HUNTER_API_KEY', 'No', 'From hunter.io — enables automatic contact discovery; leave blank to fill Contacts manually'],
     ['BUSINESS_NAME', 'Yes', 'Shown in the email signature/footer'],
     ['PHYSICAL_ADDRESS', 'Yes', 'Required in every outreach email footer (CAN-SPAM / good practice)'],
