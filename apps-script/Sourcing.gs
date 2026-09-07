@@ -204,7 +204,17 @@ function geocodeAreaId_(location) {
   return offset + Number(areaResult.osm_id);
 }
 
-/** Overpass API — lists nodes/ways carrying the given "key=value" tag inside the resolved area. */
+/**
+ * Overpass API — lists nodes/ways carrying the given "key=value" tag inside
+ * the resolved area. The main overpass-api.de instance is shared by every
+ * Overpass user on the internet and occasionally answers a plain request
+ * with an unhelpful error (a bare 406, a timeout) that has nothing to do
+ * with the query itself — so this tries a couple of independently-run
+ * mirrors in order rather than failing the whole run on the first one's bad
+ * day. All three mirrors serve the same public OSM database.
+ */
+var OVERPASS_MIRRORS_ = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://lz4.overpass-api.de/api/interpreter'];
+
 function queryOverpass_(osmTag, areaId) {
   const parts = osmTag.split('=').map(function (s) { return s.trim(); });
   const key = parts[0];
@@ -213,16 +223,26 @@ function queryOverpass_(osmTag, areaId) {
   const query = '[out:json][timeout:25];area(' + areaId + ')->.a;' +
     '(node' + filter + '(area.a);way' + filter + '(area.a););' +
     'out tags 80;';
-  const response = fetchWithRetry_('https://overpass-api.de/api/interpreter', {
-    method: 'post',
-    payload: { data: query },
-    muteHttpExceptions: true
-  }, 2);
-  if (response.getResponseCode() !== 200) {
-    throw new Error('Overpass error ' + response.getResponseCode() + ': ' + response.getContentText().substring(0, 300));
+
+  let lastError;
+  for (let i = 0; i < OVERPASS_MIRRORS_.length; i++) {
+    try {
+      const response = fetchWithRetry_(OVERPASS_MIRRORS_[i], {
+        method: 'post',
+        payload: { data: query },
+        muteHttpExceptions: true
+      }, 1);
+      if (response.getResponseCode() !== 200) {
+        lastError = new Error('Overpass error ' + response.getResponseCode() + ': ' + response.getContentText().substring(0, 300));
+        continue;
+      }
+      const data = JSON.parse(response.getContentText());
+      return data.elements || [];
+    } catch (e) {
+      lastError = e;
+    }
   }
-  const data = JSON.parse(response.getContentText());
-  return data.elements || [];
+  throw lastError;
 }
 
 function formatOsmAddress_(tags, fallbackLocation) {

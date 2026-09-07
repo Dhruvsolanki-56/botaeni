@@ -212,7 +212,7 @@ test('autoSourceLeads fails clearly when every Nominatim result is a point, not 
   assert.match(result.error, /only resolved to point results/);
 });
 
-test('autoSourceLeads logs the error and still stamps last_run_at when Overpass fails', () => {
+test('autoSourceLeads logs the error and still stamps last_run_at when every Overpass mirror fails', () => {
   const { context } = createEnv({
     fetchHandler: (url) => {
       if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
@@ -228,4 +228,26 @@ test('autoSourceLeads logs the error and still stamps last_run_at when Overpass 
   assert.ok(result.error);
   assert.equal(context.readSheetAsObjects_('Errors').length, 1);
   assert.ok(context.readSheetAsObjects_('SourceQueries')[0].last_run_at, 'a failed run should still move on next time');
+});
+
+test('autoSourceLeads falls back to the next Overpass mirror when the first one errors', () => {
+  let callsPerMirror = {};
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      callsPerMirror[url] = (callsPerMirror[url] || 0) + 1;
+      if (url.indexOf('overpass-api.de') !== -1) return { getResponseCode: () => 406, getContentText: () => 'Not Acceptable' };
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify(overpassElements([{ tags: { name: 'Acme Bakery', website: 'https://acmebakery.com' } }]))
+      };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.found, 1, 'should succeed via the second mirror after the first one 406s');
+  assert.equal(context.readSheetAsObjects_('RawLeads')[0].company_name, 'Acme Bakery');
 });
