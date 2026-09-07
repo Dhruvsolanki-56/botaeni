@@ -27,3 +27,13 @@ test('deleteAllTriggers empties the trigger list', () => {
   context.deleteAllTriggers();
   assert.equal(context.ScriptApp._triggers().length, 0);
 });
+
+test('installAllTriggersSingleAccount installs all seven jobs and clears old ones first', () => {
+  const { context } = createEnv();
+  context.ScriptApp.newTrigger('someStaleTrigger').timeBased().everyMinutes(1).create();
+
+  context.installAllTriggersSingleAccount();
+
+  const names = context.ScriptApp._triggers().map((t) => t.handlerFunctionName).sort();
+  assert.deepEqual(names, ['checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts', 'sendQueue'].sort());
+});
