@@ -24,7 +24,7 @@ const ALL_FILES = [
   'Config.gs', 'Utils.gs', 'Gemini.gs', 'SheetSetup.gs', 'Sourcing.gs',
   'Classification.gs', 'ContactDiscovery.gs', 'Personalization.gs',
   'Unsubscribe.gs', 'MimeMail.gs', 'Sender.gs', 'ReplyHandler.gs',
-  'Triggers.gs', 'SelfTest.gs'
+  'Triggers.gs', 'SelfTest.gs', 'Dashboard.gs', 'DashboardHtml.gs', 'WebApp.gs'
 ];
 
 function makeSheet(name) {
@@ -198,6 +198,18 @@ function makeLockService(options) {
   };
 }
 
+function makeHtmlOutput(html) {
+  const out = {
+    _title: '',
+    _meta: [],
+    getContent: () => html,
+    getTitle: () => out._title,
+    setTitle(t) { out._title = t; return out; },
+    addMetaTag(name, content) { out._meta.push({ name, content }); return out; }
+  };
+  return out;
+}
+
 function makeFakeDateClass(fixedNow) {
   return class FakeDate extends Date {
     constructor(...args) {
@@ -238,7 +250,7 @@ function createEnv(overrides) {
     LockService: makeLockService(overrides.lock),
     Logger: { log: (msg) => state.logs.push(String(msg)) },
     ContentService: { createTextOutput: (t) => ({ getContent: () => t }) },
-    HtmlService: { createHtmlOutput: (h) => ({ getContent: () => h }) }
+    HtmlService: { createHtmlOutput: (h) => makeHtmlOutput(h) }
   };
 
   if (overrides.gmailAdvancedEnabled) sandbox.Gmail = makeGmailAdvanced(state);

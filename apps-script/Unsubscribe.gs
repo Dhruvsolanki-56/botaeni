@@ -32,12 +32,5 @@ function handleUnsubscribeRequest_(params) {
   return 'You have been unsubscribed and will not receive further emails from us.';
 }
 
-function doPost(e) {
-  const message = handleUnsubscribeRequest_((e && e.parameter) || {});
-  return ContentService.createTextOutput(message);
-}
-
-function doGet(e) {
-  const message = handleUnsubscribeRequest_((e && e.parameter) || {});
-  return HtmlService.createHtmlOutput('<p>' + message + '</p>');
-}
+// doGet/doPost for the Web App deployment live in WebApp.gs — they route
+// between this unsubscribe handler and the dashboard.

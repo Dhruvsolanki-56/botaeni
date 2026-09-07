@@ -43,7 +43,8 @@ function setupSheets() {
     ['SEND_WINDOW_END_HOUR', 'No (default 18)', 'Local hour sending must stop'],
     ['SEND_ON_WEEKENDS', 'No (default false)', 'Set to true to allow weekend sends'],
     ['UNSUBSCRIBE_BASE_URL', 'No', 'Web App /exec URL (Deploy > New deployment > Web app) — enables a real one-click unsubscribe header'],
-    ['UNSUB_SECRET', 'No, but required if UNSUBSCRIBE_BASE_URL is set', 'Any random string — signs unsubscribe links so they cannot be forged']
+    ['UNSUB_SECRET', 'No, but required if UNSUBSCRIBE_BASE_URL is set', 'Any random string — signs unsubscribe links so they cannot be forged'],
+    ['DASHBOARD_ACCESS_KEY', 'No, but required to view the dashboard', 'Any random string — open the Web App URL with ?key=<this value> to see the dashboard; without it, the URL shows nothing']
   ];
   readme.getRange(3, 1, rows.length, 3).setValues(rows);
   readme.getRange(3, 1, 1, 3).setFontWeight('bold');

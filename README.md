@@ -21,7 +21,7 @@ it all executes on Google's servers once deployed.
 
 1. Go to [sheets.new](https://sheets.new) and create a blank spreadsheet. Name it something like "Lead-Gen Autopilot".
 2. In it, open **Extensions → Apps Script**.
-3. Delete the default `Code.gs` content. For each file in `apps-script/` (`Config.gs`, `Utils.gs`, `Gemini.gs`, `SheetSetup.gs`, `Sourcing.gs`, `Classification.gs`, `ContactDiscovery.gs`, `Personalization.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, `ReplyHandler.gs`, `Triggers.gs`, `SelfTest.gs`), create a matching script file in the editor (**+ → Script**) and paste its contents in.
+3. Delete the default `Code.gs` content. For each file in `apps-script/` (`Config.gs`, `Utils.gs`, `Gemini.gs`, `SheetSetup.gs`, `Sourcing.gs`, `Classification.gs`, `ContactDiscovery.gs`, `Personalization.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, `ReplyHandler.gs`, `Triggers.gs`, `SelfTest.gs`, `Dashboard.gs`, `DashboardHtml.gs`, `WebApp.gs`), create a matching script file in the editor (**+ → Script**) and paste its contents in.
 4. Open the project's manifest (gear icon → check "Show appsscript.json") and replace its contents with [`apps-script/appsscript.json`](apps-script/appsscript.json).
 5. In the left sidebar, click **Services (+)** and add **Gmail API** — this is what actually wires up the advanced Gmail service in your project's Cloud config; pasting the manifest alone sometimes isn't enough for Google to enable it.
 6. Save (Ctrl/Cmd+S).
@@ -81,6 +81,15 @@ Back in the **main** account's script project:
 7. Run `queueApprovedDrafts` — moves approved drafts into `SendQueue`, assigned round-robin across your `SENDER_ACCOUNTS`.
 8. Only once you're comfortable with steps 1-7: run `installCentralTriggers` (main account) and `installSenderTriggers` (each sending account) to put the whole thing on autopilot.
 
+## Live dashboard
+
+The same Web App deployment used for one-click unsubscribe (§7 in Production hardening above) also serves a real-time dashboard — funnel counts, reply breakdown, per-sender send caps, a recent-activity feed, recent errors, and a raw-data explorer that can page through any of the nine sheets in full detail. It reads the live sheet on every load; there's no separate database to keep in sync.
+
+1. Set a `DASHBOARD_ACCESS_KEY` script property to any random string. **This is required** — without it, the deployed URL shows nothing, on purpose. The sheet holds real prospect emails and reply text, and a Web App's "Anyone with the link" access mode means anyone who obtains the URL can otherwise open it; the key is what stands in for real access control on a $0 setup.
+2. If you haven't already, deploy the project: **Deploy → New deployment → Web app** (execute as "Me", access "Anyone"). Copy the `/exec` URL it gives you.
+3. Open `<that URL>?key=<your DASHBOARD_ACCESS_KEY>` in a browser and bookmark it. That's your dashboard.
+4. Redeploy (**Deploy → Manage deployments → Edit → New version**) any time you change `Dashboard.gs`, `DashboardHtml.gs`, or `WebApp.gs` — Web Apps serve whatever was live at the last deployment, not your latest saved code, until you do this.
+
 ## What's deliberately manual, and why
 
 - **Approving drafts** stays a human click until you've watched ~50 go out and trust the prompt (plan §03/§04). `queueApprovedDrafts` only ever reads rows you marked `approved`.
@@ -89,15 +98,15 @@ Back in the **main** account's script project:
 
 ## Automated tests
 
-[`test/`](test/) is a full Node.js test suite (56 tests, zero npm dependencies — just Node's built-in test runner) that loads the *actual* `.gs` files into a mocked Apps Script environment ([`test/appsScriptEnv.js`](test/appsScriptEnv.js) stands in for `SpreadsheetApp`, `GmailApp`, `UrlFetchApp`, `PropertiesService`, etc.) and exercises every function directly — no Google account needed, no network calls. Run it with:
+[`test/`](test/) is a full Node.js test suite (64 tests, zero npm dependencies — just Node's built-in test runner) that loads the *actual* `.gs` files into a mocked Apps Script environment ([`test/appsScriptEnv.js`](test/appsScriptEnv.js) stands in for `SpreadsheetApp`, `GmailApp`, `UrlFetchApp`, `PropertiesService`, `HtmlService`, etc.) and exercises every function directly — no Google account needed, no network calls. Run it with:
 
 ```bash
 npm test
 ```
 
-It covers: classification (grounding, malformed-JSON handling, idempotency), contact discovery (Hunter matching, graceful degradation without an API key), drafting (INSUFFICIENT_SIGNAL handling, suppression checks, round-robin sender assignment), sending (daily caps, send-window enforcement, suppression, the List-Unsubscribe header actually landing in the raw MIME, lock-based overlap protection), reply handling (classification, suppression, notification, idempotency), trigger installation, and `runSelfTest`'s own failure modes.
+It covers: classification (grounding, malformed-JSON handling, idempotency), contact discovery (Hunter matching, graceful degradation without an API key), drafting (INSUFFICIENT_SIGNAL handling, suppression checks, round-robin sender assignment), sending (daily caps, send-window enforcement, suppression, the List-Unsubscribe header actually landing in the raw MIME, lock-based overlap protection), reply handling (classification, suppression, notification, idempotency), trigger installation, `runSelfTest`'s own failure modes, and the dashboard (funnel/breakdown math against seeded data, the raw-data explorer, and the access-key gate on `doGet`).
 
-**What this does and doesn't prove.** Every branch of business logic above ran, for real, against realistic inputs and asserted outputs — that's genuine coverage, and it's what caught (and let me fix) real bugs while building this: `SHEETS`/`HEADERS` needing to be `var` instead of `const` to be visible outside the script's own scope, and a couple of test-side mistakes. What it *cannot* do from here is prove Google's actual APIs behave the way their docs say, or that your specific account/API keys work — that requires your real credentials, which only exist once you've done the setup above. That's exactly what `runSelfTest()` (§5, step 0) is for: the equivalent live check, run inside Apps Script once you're deployed. Treat "56/56 passing" as "the logic is correct" and "runSelfTest: PASS" as "it's correct *and* wired up right" — you want both before turning on triggers.
+**What this does and doesn't prove.** Every branch of business logic above ran, for real, against realistic inputs and asserted outputs — that's genuine coverage, and it's what caught (and let me fix) real bugs while building this: `SHEETS`/`HEADERS` needing to be `var` instead of `const` to be visible outside the script's own scope, a test that asserted the wrong average on its own seed data, and a couple of other test-side mistakes. What it *cannot* do from here is prove Google's actual APIs behave the way their docs say, or that your specific account/API keys work — that requires your real credentials, which only exist once you've done the setup above. That's exactly what `runSelfTest()` (§5, step 0) is for: the equivalent live check, run inside Apps Script once you're deployed. Treat "64/64 passing" as "the logic is correct" and "runSelfTest: PASS" as "it's correct *and* wired up right" — you want both before turning on triggers.
 
 ## Reference
 
