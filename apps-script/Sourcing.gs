@@ -177,9 +177,17 @@ function existingLeadDomains_() {
   return domains;
 }
 
-/** Nominatim (OpenStreetMap's free geocoder) — resolves a place name to an Overpass area id. */
+/**
+ * Nominatim (OpenStreetMap's free geocoder) — resolves a place name to an
+ * Overpass area id. Asks for several candidates rather than just the top
+ * one: Nominatim's top match for a city name is often a point (a landmark
+ * or the city's center node), not the administrative boundary Overpass
+ * needs as an "area" — so this picks the first candidate that actually has
+ * one (a relation or way) instead of failing on a technically-correct but
+ * useless top result.
+ */
 function geocodeAreaId_(location) {
-  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(location);
+  const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(location);
   const response = fetchWithRetry_(url, {
     muteHttpExceptions: true,
     headers: { 'User-Agent': 'LeadGenAutopilot (Google Apps Script; free-tier lead sourcing)' }
@@ -187,11 +195,13 @@ function geocodeAreaId_(location) {
   if (response.getResponseCode() !== 200) throw new Error('Nominatim error ' + response.getResponseCode() + ' for location: ' + location);
   const results = JSON.parse(response.getContentText());
   if (!results.length) throw new Error('Nominatim found no match for location: ' + location);
-  const place = results[0];
-  const offset = place.osm_type === 'relation' ? 3600000000 : place.osm_type === 'way' ? 2400000000 : 0;
-  if (!offset) throw new Error('"' + location + '" resolved to a single point, not an area — use a broader place name (city, district, state).');
+  const areaResult = results.find(function (r) { return r.osm_type === 'relation' || r.osm_type === 'way'; });
+  if (!areaResult) {
+    throw new Error('"' + location + '" only resolved to point results, not an area — try a more specific or more well-known place name (e.g. add the district/state/country).');
+  }
+  const offset = areaResult.osm_type === 'relation' ? 3600000000 : 2400000000;
   Utilities.sleep(1000); // Nominatim usage policy: max one request per second
-  return offset + Number(place.osm_id);
+  return offset + Number(areaResult.osm_id);
 }
 
 /** Overpass API — lists nodes/ways carrying the given "key=value" tag inside the resolved area. */

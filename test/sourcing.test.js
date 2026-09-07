@@ -170,6 +170,48 @@ test('autoSourceLeads picks the row that has never run, or ran longest ago, each
   assert.equal(result.category, 'Cafe', 'the never-run row should be picked before the stale-but-run one');
 });
 
+test('autoSourceLeads skips past point-only Nominatim results to find an area candidate', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) {
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify([
+            { osm_type: 'node', osm_id: 1 },
+            { osm_type: 'node', osm_id: 2 },
+            { osm_type: 'relation', osm_id: 99 }
+          ])
+        };
+      }
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  context.autoSourceLeads();
+
+  const queries = context.readSheetAsObjects_('SourceQueries');
+  assert.equal(queries[0].area_id, 3600000000 + 99, 'should use the first area-shaped (relation/way) result, not the point results ahead of it');
+});
+
+test('autoSourceLeads fails clearly when every Nominatim result is a point, not an area', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) {
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify([{ osm_type: 'node', osm_id: 1 }]) };
+      }
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Some Tiny Hamlet' });
+
+  const result = context.autoSourceLeads();
+
+  assert.match(result.error, /only resolved to point results/);
+});
+
 test('autoSourceLeads logs the error and still stamps last_run_at when Overpass fails', () => {
   const { context } = createEnv({
     fetchHandler: (url) => {
