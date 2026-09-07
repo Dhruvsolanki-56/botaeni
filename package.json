@@ -1,0 +1,8 @@
+{
+  "name": "lead-gen-autopilot",
+  "private": true,
+  "description": "Apps Script source for the $0 lead-gen pipeline, plus its Node-based logic test suite. No dependencies, no build step.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
