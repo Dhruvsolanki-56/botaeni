@@ -54,3 +54,136 @@ test('importLeadsFromPlaces writes one RawLeads row per place with a website, sk
   assert.equal(rows[0].company_name, 'Acme Bakery');
   assert.equal(rows[0].status, 'new');
 });
+
+function nominatimResult(overrides) {
+  return [Object.assign({ osm_type: 'relation', osm_id: 12345 }, overrides)];
+}
+
+function overpassElements(elements) {
+  return { elements: elements };
+}
+
+test('autoSourceLeads reports no_queries_configured when SourceQueries is empty', () => {
+  const { context } = createEnv();
+  context.setupSheets();
+  const result = context.autoSourceLeads();
+  assert.equal(result.found, 0);
+  assert.equal(result.reason, 'no_queries_configured');
+});
+
+test('autoSourceLeads geocodes once, queries Overpass, and only keeps results with both a name and a website', () => {
+  let nominatimCalls = 0;
+  let overpassCalls = 0;
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) {
+        nominatimCalls++;
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      }
+      if (url.indexOf('overpass') !== -1) {
+        overpassCalls++;
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify(overpassElements([
+            { tags: { name: 'Acme Bakery', website: 'https://acmebakery.com' } },
+            { tags: { name: 'No Website Co' } },
+            { tags: { website: 'https://noname.com' } }
+          ]))
+        };
+      }
+      throw new Error('unexpected url: ' + url);
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.found, 1);
+  assert.equal(nominatimCalls, 1);
+  assert.equal(overpassCalls, 1);
+  const rows = context.readSheetAsObjects_('RawLeads');
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].company_name, 'Acme Bakery');
+  assert.equal(rows[0].source, 'osm');
+  assert.equal(rows[0].status, 'new');
+
+  const queries = context.readSheetAsObjects_('SourceQueries');
+  assert.equal(queries[0].total_found, 1);
+  assert.ok(queries[0].area_id, 'area_id should be cached after geocoding');
+  assert.ok(queries[0].last_run_at, 'last_run_at should be stamped');
+});
+
+test('autoSourceLeads reuses the cached area_id on a later run instead of geocoding again', () => {
+  let nominatimCalls = 0;
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) {
+        nominatimCalls++;
+        return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      }
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  context.autoSourceLeads();
+  context.autoSourceLeads();
+
+  assert.equal(nominatimCalls, 1, 'second run should reuse the cached area_id');
+});
+
+test('autoSourceLeads skips a lead whose domain already exists in RawLeads', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify(overpassElements([{ tags: { name: 'Acme Bakery', website: 'https://acmebakery.com' } }]))
+      };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('RawLeads', { lead_id: 'existing', company_name: 'Acme Bakery', website: 'acmebakery.com', status: 'new' });
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.found, 0);
+  assert.equal(context.readSheetAsObjects_('RawLeads').length, 1);
+});
+
+test('autoSourceLeads picks the row that has never run, or ran longest ago, each time', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India', last_run_at: '2020-01-01T00:00:00.000Z' });
+  context.appendRow_('SourceQueries', { category: 'Cafe', osm_tag: 'amenity=cafe', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.category, 'Cafe', 'the never-run row should be picked before the stale-but-run one');
+});
+
+test('autoSourceLeads logs the error and still stamps last_run_at when Overpass fails', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return { getResponseCode: () => 503, getContentText: () => 'Overpass is overloaded' };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.found, 0);
+  assert.ok(result.error);
+  assert.equal(context.readSheetAsObjects_('Errors').length, 1);
+  assert.ok(context.readSheetAsObjects_('SourceQueries')[0].last_run_at, 'a failed run should still move on next time');
+});

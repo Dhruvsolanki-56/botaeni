@@ -36,7 +36,7 @@ The plan this was built from assumed Gemini's free tier, and the code originally
 
 In the Apps Script editor, select the function `setupSheets` from the dropdown next to the Run button, then click **Run**. First run asks you to authorize the script — that's expected (it's your own script asking your own account for Sheets/Gmail access).
 
-This creates every tab (`RawLeads`, `Classified`, `Contacts`, `Drafts`, `SendQueue`, `SentLog`, `Replies`, `Suppression`) plus a `ReadMe` tab listing every setting below.
+This creates every tab (`RawLeads`, `Classified`, `Contacts`, `Drafts`, `SendQueue`, `SentLog`, `Replies`, `Suppression`, `SourceQueries`) plus a `ReadMe` tab listing every setting below.
 
 ## 3. Set your Script Properties
 
@@ -51,7 +51,7 @@ This creates every tab (`RawLeads`, `Classified`, `Contacts`, `Drafts`, `SendQue
 | `SENDER_ACCOUNTS` | Comma-separated Gmail addresses that will actually send, e.g. `sendbox1@gmail.com,sendbox2@gmail.com` — **not** adsolutions200@gmail.com itself, see the plan's §00 |
 | `ICP_DESCRIPTION` | One or two sentences on who you actually want to reach, e.g. `Small retail and service businesses in India that don't yet run paid ads.` |
 | `HUNTER_API_KEY` | Optional — from [hunter.io](https://hunter.io) free plan. Leave unset to fill `Contacts.contact_email` by hand instead |
-| `PLACES_API_KEY` | Optional — only needed if you use `importLeadsFromPlaces()` for Google Maps-sourced leads |
+| `PLACES_API_KEY` | Optional — only needed if you use `importLeadsFromPlaces()` for Google Maps-sourced leads. Not needed for `autoSourceLeads()` (the OpenStreetMap-based one) — see "Automatic lead sourcing" below |
 | `DAILY_CAP_PER_SENDER` | Leave unset for the default of `10`. Do not raise this in week 1 — see the plan's warm-up schedule |
 
 ## 4. Prepare your sending accounts (do this before sending anything)
@@ -76,18 +76,38 @@ The main account (adsolutions200@gmail.com's own script, from steps 1-3) handles
 Back in the **main** account's script project:
 
 0. Run `runSelfTest` and read the Logger output (**View → Logs**, or Ctrl/Cmd+Enter). Fix anything marked `FAIL` before continuing — it checks your config, sheet structure, Groq key, and sends you one real test email.
-1. Add a few test leads to `RawLeads` (fill `company_name`, `website`, `category`, `address` — leave the rest blank), or run `importLeadsFromPlaces("digital marketing agency", "IN")` from the editor for a live test batch.
+1. Add a few test leads to `RawLeads` (fill `company_name`, `website`, `category`, `address` — leave the rest blank), or fill in the `SourceQueries` tab and run `autoSourceLeads` — see "Automatic lead sourcing" below.
 2. Run `normalizeRawLeads` — fills in `lead_id` / `status`.
 3. Run `classifyLeads` — calls Groq, writes to `Classified`. **Read every row it produces.** This is the step the whole plan says to hand-check before trusting it.
 4. Run `findContacts` — fills `Contacts` (or marks `manual_needed` if `HUNTER_API_KEY` isn't set).
 5. Run `draftEmails` — writes drafts to `Drafts` with status `pending_review`.
 6. **Open the `Drafts` tab and read every single draft.** Change `status` to `approved` for the ones you'd actually send, or `rejected` for the rest.
 7. Run `queueApprovedDrafts` — moves approved drafts into `SendQueue`, assigned round-robin across your `SENDER_ACCOUNTS`.
-8. Only once you're comfortable with steps 1-7: run `installCentralTriggers` (main account) and `installSenderTriggers` (each sending account) to put the whole thing on autopilot.
+8. Only once you're comfortable with steps 1-7: run `installCentralTriggers` (main account) and `installSenderTriggers` (each sending account) to put the whole thing on autopilot. `installCentralTriggers` already includes `autoSourceLeads` on a 6-hour timer, so once `SourceQueries` is filled in, lead generation itself runs unattended too — not just the pipeline downstream of it.
+
+## Automatic lead sourcing
+
+Two ways to keep `RawLeads` filled without touching the sheet by hand:
+
+- **`importLeadsFromPlaces(query, regionBias)`** — Google Places, best coverage, but needs a `PLACES_API_KEY` from a Google Cloud project, and Google now gates that behind a billing account on file (a card, even for the free tier that would normally cover it). Skip this if that's a wall you'd rather not hit — see "Why Groq, not Gemini" above for the same issue with a different API.
+- **`autoSourceLeads()`** — [Sourcing.gs](apps-script/Sourcing.gs), genuinely free, no signup, no card, ever. Pulls from OpenStreetMap instead: Nominatim resolves a place name to an area, Overpass lists businesses tagged in it. This is the one that's wired into `installCentralTriggers()`/`installAllTriggersSingleAccount()` on a 6-hour timer, so it's the actual "automatic" half of automatic lead generation.
+
+To use it, fill in the **`SourceQueries`** tab (created by `setupSheets()`) with one row per thing you want to search for:
+
+| category | osm_tag | location |
+|---|---|---|
+| Bakery | `shop=bakery` | Ahmedabad, India |
+| Restaurant | `amenity=restaurant` | Ahmedabad, India |
+| Dentist | `amenity=dentist` | Ahmedabad, India |
+| Real estate agency | `office=real_estate_agent` | Ahmedabad, India |
+
+Leave `area_id`, `last_run_at`, and `total_found` blank — the script fills those in itself (it geocodes each `location` once and caches the result, so later runs only call Overpass). Each call to `autoSourceLeads()` processes whichever row has gone longest without running, so a handful of rows all get covered over time rather than one row hogging every run. More `osm_tag` examples are at [wiki.openstreetmap.org/wiki/Map_features](https://wiki.openstreetmap.org/wiki/Map_features); pick ones that match who `ICP_DESCRIPTION` describes.
+
+Coverage depends on how well local businesses are mapped on OpenStreetMap — it's crowdsourced, so it's patchier than Google Places in some areas and just as good in others. A result only becomes a `RawLeads` row if it has both a name and a website tag — `findContacts` has nothing to work with otherwise, so there's no point adding it. If a run finds nothing, that usually means the category/location combination just isn't well-tagged in OSM yet, not that anything's broken; try a nearby city or a broader/different tag.
 
 ## Live dashboard
 
-The same Web App deployment used for one-click unsubscribe (§7 in Production hardening above) also serves a real-time dashboard — funnel counts, reply breakdown, per-sender send caps, a recent-activity feed, recent errors, and a raw-data explorer that can page through any of the nine sheets in full detail. It reads the live sheet on every load; there's no separate database to keep in sync.
+The same Web App deployment used for one-click unsubscribe (§7 in Production hardening above) also serves a real-time dashboard — funnel counts, reply breakdown, per-sender send caps, a recent-activity feed, recent errors, and a raw-data explorer that can page through any of the ten sheets in full detail. It reads the live sheet on every load; there's no separate database to keep in sync.
 
 1. Set a `DASHBOARD_ACCESS_KEY` script property to any random string. **This is required** — without it, the deployed URL shows nothing, on purpose. The sheet holds real prospect emails and reply text, and a Web App's "Anyone with the link" access mode means anyone who obtains the URL can otherwise open it; the key is what stands in for real access control on a $0 setup.
 2. If you haven't already, deploy the project: **Deploy → New deployment → Web app** (execute as "Me", access "Anyone"). Copy the `/exec` URL it gives you.

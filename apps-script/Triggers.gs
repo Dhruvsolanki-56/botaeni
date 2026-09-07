@@ -5,6 +5,7 @@
  */
 function installCentralTriggers() {
   deleteAllTriggers();
+  ScriptApp.newTrigger('autoSourceLeads').timeBased().everyHours(6).create();
   ScriptApp.newTrigger('normalizeRawLeads').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('classifyLeads').timeBased().everyHours(2).create();
   ScriptApp.newTrigger('findContacts').timeBased().everyHours(4).create();
@@ -29,6 +30,7 @@ function installSenderTriggers() {
  */
 function installAllTriggersSingleAccount() {
   deleteAllTriggers();
+  ScriptApp.newTrigger('autoSourceLeads').timeBased().everyHours(6).create();
   ScriptApp.newTrigger('normalizeRawLeads').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('classifyLeads').timeBased().everyHours(2).create();
   ScriptApp.newTrigger('findContacts').timeBased().everyHours(4).create();

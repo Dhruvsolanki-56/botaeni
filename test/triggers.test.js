@@ -3,14 +3,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createEnv } = require('./appsScriptEnv');
 
-test('installCentralTriggers installs exactly the five central jobs and clears old ones first', () => {
+test('installCentralTriggers installs exactly the six central jobs and clears old ones first', () => {
   const { context } = createEnv();
   context.ScriptApp.newTrigger('someStaleTrigger').timeBased().everyMinutes(1).create();
 
   context.installCentralTriggers();
 
   const names = context.ScriptApp._triggers().map((t) => t.handlerFunctionName).sort();
-  assert.deepEqual(names, ['checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts'].sort());
+  assert.deepEqual(names, ['autoSourceLeads', 'checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts'].sort());
 });
 
 test('installSenderTriggers installs only sendQueue', () => {
@@ -28,12 +28,12 @@ test('deleteAllTriggers empties the trigger list', () => {
   assert.equal(context.ScriptApp._triggers().length, 0);
 });
 
-test('installAllTriggersSingleAccount installs all seven jobs and clears old ones first', () => {
+test('installAllTriggersSingleAccount installs all eight jobs and clears old ones first', () => {
   const { context } = createEnv();
   context.ScriptApp.newTrigger('someStaleTrigger').timeBased().everyMinutes(1).create();
 
   context.installAllTriggersSingleAccount();
 
   const names = context.ScriptApp._triggers().map((t) => t.handlerFunctionName).sort();
-  assert.deepEqual(names, ['checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts', 'sendQueue'].sort());
+  assert.deepEqual(names, ['autoSourceLeads', 'checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts', 'sendQueue'].sort());
 });
