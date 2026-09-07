@@ -21,7 +21,7 @@ const crypto = require('crypto');
 const APPS_SCRIPT_DIR = path.join(__dirname, '..', 'apps-script');
 
 const ALL_FILES = [
-  'Config.gs', 'Utils.gs', 'Gemini.gs', 'SheetSetup.gs', 'Sourcing.gs',
+  'Config.gs', 'Utils.gs', 'Groq.gs', 'SheetSetup.gs', 'Sourcing.gs',
   'Classification.gs', 'ContactDiscovery.gs', 'Personalization.gs',
   'Unsubscribe.gs', 'MimeMail.gs', 'Sender.gs', 'ReplyHandler.gs',
   'Triggers.gs', 'SelfTest.gs', 'Dashboard.gs', 'DashboardHtml.gs', 'WebApp.gs'
@@ -222,7 +222,7 @@ function makeFakeDateClass(fixedNow) {
 
 /**
  * overrides:
- *   properties        - initial Script Properties, e.g. { GEMINI_API_KEY: 'x' }
+ *   properties        - initial Script Properties, e.g. { GROQ_API_KEY: 'x' }
  *   fetchHandler       - (url, options) => mockResponse, required if code under test calls UrlFetchApp
  *   activeUserEmail    - Session.getActiveUser().getEmail()
  *   timeZone           - Session.getScriptTimeZone()
@@ -265,13 +265,16 @@ function createEnv(overrides) {
   return { context, spreadsheet, state };
 }
 
+// Named geminiResponse/promptFromGeminiPayload for historical reasons — the
+// AI provider is Groq (OpenAI-compatible chat completions shape) as of the
+// Groq.gs migration; only the shape below changed, not these export names.
 function geminiResponse(text) {
-  return makeResponse(200, { candidates: [{ content: { parts: [{ text }] } }] });
+  return makeResponse(200, { choices: [{ message: { content: text } }] });
 }
 
 function promptFromGeminiPayload(options) {
   const body = JSON.parse(options.payload);
-  return body.contents[0].parts[0].text;
+  return body.messages[0].content;
 }
 
 module.exports = { createEnv, makeResponse, makeMessage, makeThread, geminiResponse, promptFromGeminiPayload };

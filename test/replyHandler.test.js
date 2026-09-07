@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { createEnv, geminiResponse, makeMessage, makeThread } = require('./appsScriptEnv');
 
 const BASE_PROPS = {
-  GEMINI_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
+  GROQ_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
   REPLY_TO_EMAIL: 'adsolutions200@gmail.com', SENDER_ACCOUNTS: 'me@gmail.com', ICP_DESCRIPTION: 'SMBs'
 };
 

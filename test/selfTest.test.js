@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { createEnv, geminiResponse, promptFromGeminiPayload } = require('./appsScriptEnv');
 
 const FULL_PROPS = {
-  GEMINI_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
+  GROQ_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
   REPLY_TO_EMAIL: 'adsolutions200@gmail.com', SENDER_ACCOUNTS: 'me@gmail.com', ICP_DESCRIPTION: 'SMBs',
   SEND_WINDOW_START_HOUR: '9', SEND_WINDOW_END_HOUR: '18', DAILY_CAP_PER_SENDER: '10'
 };
@@ -37,7 +37,7 @@ test('runSelfTest fails fast and clearly when required config is missing', () =>
 
   const configCheck = results.find((r) => r.name.indexOf('script properties') !== -1);
   assert.equal(configCheck.ok, false);
-  assert.match(configCheck.error, /GEMINI_API_KEY/);
+  assert.match(configCheck.error, /GROQ_API_KEY/);
 });
 
 test('runSelfTest reports a failure if the sheet structure is missing or wrong', () => {

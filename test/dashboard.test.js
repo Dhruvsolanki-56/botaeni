@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { createEnv } = require('./appsScriptEnv');
 
 const BASE_PROPS = {
-  GEMINI_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
+  GROQ_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
   REPLY_TO_EMAIL: 'adsolutions200@gmail.com', SENDER_ACCOUNTS: 'a@gmail.com,b@gmail.com',
   ICP_DESCRIPTION: 'SMBs', ICP_FIT_THRESHOLD: '60', DAILY_CAP_PER_SENDER: '10'
 };

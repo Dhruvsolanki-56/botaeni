@@ -39,8 +39,8 @@ function getProp_(key, fallback) {
 
 function getConfig() {
   return {
-    geminiApiKey: getProp_('GEMINI_API_KEY', ''),
-    geminiModel: getProp_('GEMINI_MODEL', 'gemini-flash-latest'),
+    groqApiKey: getProp_('GROQ_API_KEY', ''),
+    groqModel: getProp_('GROQ_MODEL', 'llama-3.3-70b-versatile'),
     hunterApiKey: getProp_('HUNTER_API_KEY', ''),
     businessName: getProp_('BUSINESS_NAME', 'AdSolutions'),
     physicalAddress: getProp_('PHYSICAL_ADDRESS', 'REPLACE_WITH_YOUR_MAILING_ADDRESS'),
@@ -58,7 +58,7 @@ function getConfig() {
   };
 }
 
-var REQUIRED_CONFIG_KEYS = ['GEMINI_API_KEY', 'BUSINESS_NAME', 'PHYSICAL_ADDRESS', 'REPLY_TO_EMAIL', 'SENDER_ACCOUNTS', 'ICP_DESCRIPTION'];
+var REQUIRED_CONFIG_KEYS = ['GROQ_API_KEY', 'BUSINESS_NAME', 'PHYSICAL_ADDRESS', 'REPLY_TO_EMAIL', 'SENDER_ACCOUNTS', 'ICP_DESCRIPTION'];
 
 function validateConfig_() {
   const props = PropertiesService.getScriptProperties().getProperties();

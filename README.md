@@ -2,7 +2,7 @@
 
 This is the working implementation of the plan (industry/entity classification →
 contact discovery → AI-personalized email → send → reply handling), built on
-the free stack: Google Sheets + Apps Script + Gemini free tier + Gmail.
+the free stack: Google Sheets + Apps Script + Groq's free tier + Gmail. (The plan originally called for Gemini; the code uses Groq instead because Gemini's free tier now requires a billing account on file for some Google accounts — Groq's free tier genuinely doesn't. See "Why Groq, not Gemini" below.)
 
 All code lives in [`apps-script/`](apps-script/). It's plain Apps Script
 (`.gs` files) — there's nothing to `npm install` and nothing runs on your PC;
@@ -12,16 +12,20 @@ it all executes on Google's servers once deployed.
 
 - **Overlap protection** — every entry point (`classifyLeads`, `findContacts`, `draftEmails`, `queueApprovedDrafts`, `sendQueue`, `checkReplies`) takes a script lock first ([Utils.gs](apps-script/Utils.gs)'s `withLock_`), so a slow run and its next scheduled trigger can never double-process the same rows or double-send.
 - **Execution-time budget** — each batch function checks elapsed time against a 4.5-minute budget and stops cleanly, leaving the rest for the next trigger, instead of risking Apps Script's hard 6-minute kill.
-- **Retry with backoff** — every external call (Gemini, Hunter, Places) goes through `fetchWithRetry_`, which retries 429/5xx responses with exponential backoff before giving up.
+- **Retry with backoff** — every external call (Groq, Hunter, Places) goes through `fetchWithRetry_`, which retries 429/5xx responses with exponential backoff before giving up.
 - **An `Errors` sheet** — every caught failure is written there with a timestamp, the function, and context, not just to Apps Script's Logger (which you'd otherwise never see).
 - **Real `List-Unsubscribe`** — [MimeMail.gs](apps-script/MimeMail.gs) sends through the Gmail advanced service with a proper `List-Unsubscribe` header (and, if you deploy the optional Web App in [Unsubscribe.gs](apps-script/Unsubscribe.gs), a full RFC 8058 one-click `List-Unsubscribe-Post` too) — this is what actually renders Gmail's native "Unsubscribe" pill and lowers spam complaints. It falls back to plain `GmailApp.sendEmail` automatically if that advanced service isn't enabled, so sending never breaks.
-- **`runSelfTest()`** ([SelfTest.gs](apps-script/SelfTest.gs)) — checks your config, sheet structure, Gemini key, Hunter key, Gmail quota, and sends one real end-to-end test email to yourself. Run this after setup and after any config change, before turning on triggers.
+- **`runSelfTest()`** ([SelfTest.gs](apps-script/SelfTest.gs)) — checks your config, sheet structure, Groq key, Hunter key, Gmail quota, and sends one real end-to-end test email to yourself. Run this after setup and after any config change, before turning on triggers.
+
+## Why Groq, not Gemini
+
+The plan this was built from assumed Gemini's free tier, and the code originally called Gemini. In practice, Google now gates some accounts' Gemini free-tier access behind "add a billing account" — even a $0-spend one — and in at least one case, that same account was also blocked from creating a *new* Google Cloud project ("the request is suspicious"), meaning the restriction is on the account, not just the API. Rather than require a card on file, [Groq.gs](apps-script/Groq.gs) calls [Groq's API](https://console.groq.com) instead — genuinely free, no card, 14,400 requests/day, OpenAI-compatible. Every prompt, every other file, and the whole pipeline is unchanged; only the HTTP call inside `callGemini_`/`callGeminiJson_` (names kept for minimal diff) points at Groq now. If your Google account isn't restricted, you can switch back by reverting to the Gemini call and setting `GEMINI_API_KEY` instead of `GROQ_API_KEY`.
 
 ## 1. Create the sheet and paste in the code
 
 1. Go to [sheets.new](https://sheets.new) and create a blank spreadsheet. Name it something like "Lead-Gen Autopilot".
 2. In it, open **Extensions → Apps Script**.
-3. Delete the default `Code.gs` content. For each file in `apps-script/` (`Config.gs`, `Utils.gs`, `Gemini.gs`, `SheetSetup.gs`, `Sourcing.gs`, `Classification.gs`, `ContactDiscovery.gs`, `Personalization.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, `ReplyHandler.gs`, `Triggers.gs`, `SelfTest.gs`, `Dashboard.gs`, `DashboardHtml.gs`, `WebApp.gs`), create a matching script file in the editor (**+ → Script**) and paste its contents in.
+3. Delete the default `Code.gs` content. For each file in `apps-script/` (`Config.gs`, `Utils.gs`, `Groq.gs`, `SheetSetup.gs`, `Sourcing.gs`, `Classification.gs`, `ContactDiscovery.gs`, `Personalization.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, `ReplyHandler.gs`, `Triggers.gs`, `SelfTest.gs`, `Dashboard.gs`, `DashboardHtml.gs`, `WebApp.gs`), create a matching script file in the editor (**+ → Script**) and paste its contents in.
 4. Open the project's manifest (gear icon → check "Show appsscript.json") and replace its contents with [`apps-script/appsscript.json`](apps-script/appsscript.json).
 5. In the left sidebar, click **Services (+)** and add **Gmail API** — this is what actually wires up the advanced Gmail service in your project's Cloud config; pasting the manifest alone sometimes isn't enough for Google to enable it.
 6. Save (Ctrl/Cmd+S).
@@ -40,7 +44,7 @@ This creates every tab (`RawLeads`, `Classified`, `Contacts`, `Drafts`, `SendQue
 
 | Key | Value |
 |---|---|
-| `GEMINI_API_KEY` | Free key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — sign in with any Google account, no card needed |
+| `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) — sign in with any Google account, no card needed, go to API Keys → Create |
 | `BUSINESS_NAME` | Your business name, shown in every email footer |
 | `PHYSICAL_ADDRESS` | A real mailing address — required in every outreach email |
 | `REPLY_TO_EMAIL` | `adsolutions200@gmail.com` |
@@ -60,7 +64,7 @@ For each address in `SENDER_ACCOUNTS`:
 Then, **for each sending account**, logged into that Google account:
 1. Go to [sheets.google.com](https://sheets.google.com), open the shared sheet.
 2. **Extensions → Apps Script** — this creates a *separate* script project bound to the same sheet, owned by that account.
-3. Paste in `Config.gs`, `Utils.gs`, `Gemini.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, and the manifest (this deployment only ever needs to send — it doesn't need Classification.gs, ContactDiscovery.gs, Personalization.gs, or ReplyHandler.gs).
+3. Paste in `Config.gs`, `Utils.gs`, `Groq.gs`, `Unsubscribe.gs`, `MimeMail.gs`, `Sender.gs`, and the manifest (this deployment only ever needs to send — it doesn't need Classification.gs, ContactDiscovery.gs, Personalization.gs, or ReplyHandler.gs).
 4. Click **Services (+) → Gmail API** here too, so this account's sends carry a real `List-Unsubscribe` header (optional — sending still works without it, see MimeMail.gs).
 5. Set that account's own Script Properties (same values as step 3 above — they read the same sheet, so values should match).
 6. Run `runSelfTest` once — it's safe to run from any deployment — then `installSenderTriggers`, authorizing when asked.
@@ -71,10 +75,10 @@ The main account (adsolutions200@gmail.com's own script, from steps 1-3) handles
 
 Back in the **main** account's script project:
 
-0. Run `runSelfTest` and read the Logger output (**View → Logs**, or Ctrl/Cmd+Enter). Fix anything marked `FAIL` before continuing — it checks your config, sheet structure, Gemini key, and sends you one real test email.
+0. Run `runSelfTest` and read the Logger output (**View → Logs**, or Ctrl/Cmd+Enter). Fix anything marked `FAIL` before continuing — it checks your config, sheet structure, Groq key, and sends you one real test email.
 1. Add a few test leads to `RawLeads` (fill `company_name`, `website`, `category`, `address` — leave the rest blank), or run `importLeadsFromPlaces("digital marketing agency", "IN")` from the editor for a live test batch.
 2. Run `normalizeRawLeads` — fills in `lead_id` / `status`.
-3. Run `classifyLeads` — calls Gemini, writes to `Classified`. **Read every row it produces.** This is the step the whole plan says to hand-check before trusting it.
+3. Run `classifyLeads` — calls Groq, writes to `Classified`. **Read every row it produces.** This is the step the whole plan says to hand-check before trusting it.
 4. Run `findContacts` — fills `Contacts` (or marks `manual_needed` if `HUNTER_API_KEY` isn't set).
 5. Run `draftEmails` — writes drafts to `Drafts` with status `pending_review`.
 6. **Open the `Drafts` tab and read every single draft.** Change `status` to `approved` for the ones you'd actually send, or `rejected` for the rest.

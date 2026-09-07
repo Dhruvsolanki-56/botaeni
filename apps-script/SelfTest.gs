@@ -31,14 +31,14 @@ function runSelfTest() {
     });
   });
 
-  record('Gemini API key works', function () {
+  record('Groq API key works', function () {
     const reply = callGemini_('Reply with exactly the single word: OK').trim();
     if (reply.toUpperCase().indexOf('OK') === -1) {
-      throw new Error('Unexpected Gemini response: ' + reply.substring(0, 100));
+      throw new Error('Unexpected Groq response: ' + reply.substring(0, 100));
     }
   });
 
-  record('Gemini JSON mode parses correctly', function () {
+  record('Groq JSON mode parses correctly', function () {
     const parsed = callGeminiJson_('Return a JSON object with exactly one field, "status", set to "ok".');
     if (parsed.status !== 'ok') throw new Error('Unexpected JSON: ' + JSON.stringify(parsed));
   });

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { createEnv, geminiResponse, promptFromGeminiPayload } = require('./appsScriptEnv');
 
 const REQUIRED_PROPS = {
-  GEMINI_API_KEY: 'test-key', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
+  GROQ_API_KEY: 'test-key', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
   REPLY_TO_EMAIL: 'adsolutions200@gmail.com', SENDER_ACCOUNTS: 'a@gmail.com',
   ICP_DESCRIPTION: 'Small local businesses.'
 };
@@ -29,7 +29,7 @@ test('classifyLeads writes a Classified row and flips RawLeads status', () => {
   const { context } = createEnv({
     properties: REQUIRED_PROPS,
     fetchHandler: (url, options) => {
-      if (url.indexOf('generativelanguage') !== -1) { geminiCalls++; return geminiResponse(JSON.stringify(classification)); }
+      if (url.indexOf('groq.com') !== -1) { geminiCalls++; return geminiResponse(JSON.stringify(classification)); }
       return { getResponseCode: () => 200, getContentText: () => '<p>We help local bakeries increase foot traffic.</p>' };
     }
   });
@@ -52,7 +52,7 @@ test('classifyLeads never invents facts: the prompt requires the input to carry 
   const { context } = createEnv({
     properties: REQUIRED_PROPS,
     fetchHandler: (url, options) => {
-      if (url.indexOf('generativelanguage') !== -1) {
+      if (url.indexOf('groq.com') !== -1) {
         capturedPrompt = promptFromGeminiPayload(options);
         return geminiResponse(JSON.stringify({ industry: 'x', icp_fit_score: 10, confidence: 'low' }));
       }
@@ -70,7 +70,7 @@ test('classifyLeads handles malformed Gemini JSON without crashing, and logs it'
   const { context } = createEnv({
     properties: REQUIRED_PROPS,
     fetchHandler: (url) => {
-      if (url.indexOf('generativelanguage') !== -1) return geminiResponse('not valid json {{{');
+      if (url.indexOf('groq.com') !== -1) return geminiResponse('not valid json {{{');
       return { getResponseCode: () => 200, getContentText: () => '<p>site</p>' };
     }
   });
@@ -89,7 +89,7 @@ test('classifyLeads skips a lead that already has a Classified row instead of ca
   let geminiCalls = 0;
   const { context } = createEnv({
     properties: REQUIRED_PROPS,
-    fetchHandler: (url) => { if (url.indexOf('generativelanguage') !== -1) geminiCalls++; return geminiResponse('{}'); }
+    fetchHandler: (url) => { if (url.indexOf('groq.com') !== -1) geminiCalls++; return geminiResponse('{}'); }
   });
   seedRawLead(context);
   const leadId = context.readSheetAsObjects_('RawLeads')[0].lead_id;

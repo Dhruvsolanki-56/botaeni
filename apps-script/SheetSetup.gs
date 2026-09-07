@@ -28,8 +28,8 @@ function setupSheets() {
   readme.getRange('A1').setFontWeight('bold').setFontSize(13);
   const rows = [
     ['Key', 'Required?', 'What it is'],
-    ['GEMINI_API_KEY', 'Yes', 'Free key from Google AI Studio (aistudio.google.com/apikey)'],
-    ['GEMINI_MODEL', 'No (default gemini-flash-latest)', 'Override if you want a specific Gemini model'],
+    ['GROQ_API_KEY', 'Yes', 'Free key from console.groq.com (no card required) — sign in, go to API Keys, create key'],
+    ['GROQ_MODEL', 'No (default llama-3.3-70b-versatile)', 'Override if you want a different Groq model'],
     ['HUNTER_API_KEY', 'No', 'From hunter.io — enables automatic contact discovery; leave blank to fill Contacts manually'],
     ['BUSINESS_NAME', 'Yes', 'Shown in the email signature/footer'],
     ['PHYSICAL_ADDRESS', 'Yes', 'Required in every outreach email footer (CAN-SPAM / good practice)'],

@@ -85,13 +85,13 @@ test('fetchWithRetry_ gives up after exhausting retries', () => {
 
 test('validateConfig_ lists every missing required key', () => {
   const { context } = createEnv({ properties: {} });
-  assert.throws(() => context.validateConfig_(), /GEMINI_API_KEY/);
+  assert.throws(() => context.validateConfig_(), /GROQ_API_KEY/);
 });
 
 test('validateConfig_ passes once all required keys are set', () => {
   const { context } = createEnv({
     properties: {
-      GEMINI_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
+      GROQ_API_KEY: 'k', BUSINESS_NAME: 'AdSolutions', PHYSICAL_ADDRESS: '123 Main St',
       REPLY_TO_EMAIL: 'adsolutions200@gmail.com', SENDER_ACCOUNTS: 'a@gmail.com', ICP_DESCRIPTION: 'SMBs'
     }
   });
