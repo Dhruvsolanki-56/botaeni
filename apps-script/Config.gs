@@ -20,7 +20,7 @@ var SHEETS = {
 
 var HEADERS = {
   RawLeads: ['lead_id', 'source', 'company_name', 'website', 'category', 'address', 'phone', 'added_at', 'status'],
-  SourceQueries: ['category', 'osm_tag', 'location', 'area_id', 'last_run_at', 'total_found'],
+  SourceQueries: ['category', 'osm_tag', 'location', 'area_id', 'last_run_at', 'total_found', 'enabled'],
   Classified: ['lead_id', 'industry', 'sub_vertical', 'company_size_estimate', 'icp_fit_score', 'likely_decision_maker_title', 'pitch_angle', 'evidence_snippet', 'confidence', 'classified_at'],
   Contacts: ['lead_id', 'contact_name', 'contact_title', 'contact_email', 'verification_status', 'source', 'found_at'],
   Drafts: ['lead_id', 'contact_email', 'subject', 'body', 'status', 'created_at', 'reviewed_at'],

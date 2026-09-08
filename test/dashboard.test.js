@@ -124,3 +124,28 @@ test('doPost unsubscribes with a valid signed token', () => {
   assert.match(result.getContent(), /unsubscribed/);
   assert.equal(context.isSuppressed_('x@example.com'), true);
 });
+
+test('runPipelineStage dispatches "normalize" to normalizeRawLeads', () => {
+  const { context } = createEnv({ properties: BASE_PROPS });
+  context.setupSheets();
+  context.appendRow_('RawLeads', { company_name: 'Acme', website: 'acme.com' });
+
+  context.runPipelineStage('normalize');
+
+  assert.equal(context.readSheetAsObjects_('RawLeads')[0].status, 'new');
+});
+
+test('runPipelineStage dispatches "sourceLeads" to autoSourceLeads', () => {
+  const { context } = createEnv({ properties: BASE_PROPS });
+  context.setupSheets();
+
+  const result = context.runPipelineStage('sourceLeads');
+
+  assert.equal(result.reason, 'no_queries_configured', 'should be the exact autoSourceLeads() behavior for an empty SourceQueries sheet');
+});
+
+test('runPipelineStage rejects a stage name that is not on the whitelist', () => {
+  const { context } = createEnv({ properties: BASE_PROPS });
+  context.setupSheets();
+  assert.throws(() => context.runPipelineStage('deleteEverything'), /Unknown pipeline stage/);
+});

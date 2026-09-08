@@ -74,3 +74,24 @@ function getSheetRows(sheetName, limit) {
   const rows = readSheetAsObjects_(sheetName).map(function (r) { delete r._rowNumber; return r; });
   return { header: HEADERS[sheetName], sheetNames: Object.keys(HEADERS), rows: rows.slice(-(limit || 200)).reverse() };
 }
+
+/**
+ * Dashboard "Run now" buttons — one whitelisted entry point instead of
+ * exposing every pipeline function directly to google.script.run, so the
+ * set of things a page load can trigger is explicit and reviewable in one
+ * place. Every stage here is exactly what the timers already call; a manual
+ * run and a scheduled one behave identically (same lock, same budget).
+ */
+function runPipelineStage(stageName) {
+  switch (stageName) {
+    case 'sourceLeads': return autoSourceLeads();
+    case 'normalize': return normalizeRawLeads();
+    case 'classify': return classifyLeads();
+    case 'findContacts': return findContacts();
+    case 'draftEmails': return draftEmails();
+    case 'queueApproved': return queueApprovedDrafts();
+    case 'sendQueue': return sendQueue();
+    case 'checkReplies': return checkReplies();
+    default: throw new Error('Unknown pipeline stage: ' + stageName);
+  }
+}

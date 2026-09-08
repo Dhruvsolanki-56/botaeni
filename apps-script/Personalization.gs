@@ -112,3 +112,16 @@ function queueApprovedDrafts() {
     PropertiesService.getScriptProperties().setProperty('_SENDER_ROUND_ROBIN_COUNTER', String(counter));
   });
 }
+
+/** Dashboard-facing: drafts still awaiting a human decision. */
+function listPendingDrafts() {
+  return readSheetAsObjects_(SHEETS.DRAFTS).filter(function (d) { return d.status === 'pending_review'; });
+}
+
+/** Dashboard "Approve"/"Reject" buttons — the only two decisions a human ever makes here; queueApprovedDrafts() picks up approved ones on its own schedule (or via the dashboard's "Send now" button). */
+function setDraftStatus(rowNumber, status) {
+  if (status !== 'approved' && status !== 'rejected') throw new Error('status must be "approved" or "rejected", got: ' + status);
+  setCell_(SHEETS.DRAFTS, rowNumber, 'status', status);
+  setCell_(SHEETS.DRAFTS, rowNumber, 'reviewed_at', nowIso_());
+  return listPendingDrafts();
+}

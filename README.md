@@ -109,6 +109,15 @@ Coverage depends on how well local businesses are mapped on OpenStreetMap — it
 
 The same Web App deployment used for one-click unsubscribe (§7 in Production hardening above) also serves a real-time dashboard — funnel counts, reply breakdown, per-sender send caps, a recent-activity feed, recent errors, and a raw-data explorer that can page through any of the ten sheets in full detail. It reads the live sheet on every load; there's no separate database to keep in sync.
 
+It's also a full control panel, not just a read-only view — everything below works without opening the Apps Script editor or the sheet itself:
+
+- **Start/stop automation** — one button installs or removes every trigger (same as running `installAllTriggersSingleAccount()`/`deleteAllTriggers()` yourself), with a live badge showing whether it's running and how many triggers are active.
+- **Run any stage right now** — Source leads, Normalize, Classify, Find contacts, Draft emails, Queue approved, Send queue, Check replies each have their own button, for when you don't want to wait for the timer (e.g. right after adding a new `SourceQueries` row). "Send queue now" asks for confirmation first since it sends real email.
+- **Lead-source targets** — the `SourceQueries` sheet, editable from the page: toggle any target on/off, run one target immediately, remove one, add a new one (category / osm_tag / location), or enable/disable everything at once. A disabled target is skipped by `autoSourceLeads()` whether it's the timer or a manual run.
+- **Drafts awaiting review** — every `pending_review` draft shown in full (subject, recipient, body) with Approve/Reject buttons right there, instead of opening the `Drafts` tab.
+
+All of this calls the same functions the timers call — `google.script.run` on a whitelisted set of server functions (`runPipelineStage`, `startAutomation`/`stopAutomation`, the `SourceQueries`/`Drafts` CRUD functions) — so a manual click and a scheduled run behave identically: same lock, same budget, same safety checks. The `DASHBOARD_ACCESS_KEY` in the URL is the only thing gating access to all of this, so keep that link as private as you would the sheet itself.
+
 1. Set a `DASHBOARD_ACCESS_KEY` script property to any random string. **This is required** — without it, the deployed URL shows nothing, on purpose. The sheet holds real prospect emails and reply text, and a Web App's "Anyone with the link" access mode means anyone who obtains the URL can otherwise open it; the key is what stands in for real access control on a $0 setup.
 2. If you haven't already, deploy the project: **Deploy → New deployment → Web app** (execute as "Me", access "Anyone"). Copy the `/exec` URL it gives you.
 3. Open `<that URL>?key=<your DASHBOARD_ACCESS_KEY>` in a browser and bookmark it. That's your dashboard.

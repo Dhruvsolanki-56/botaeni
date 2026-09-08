@@ -68,6 +68,7 @@ function makeSheet(name) {
       return sheet.getRange(1, 1, numRows, numCols);
     },
     appendRow(rowArr) { data.push(rowArr.slice()); },
+    deleteRow(rowNumber) { data.splice(rowNumber - 1, 1); },
     setFrozenRows() { return this; },
     autoResizeColumns() { return this; },
     setColumnWidth() { return this; },
@@ -168,12 +169,19 @@ function makeGmailAdvanced(state) {
 
 function makeScriptApp() {
   let triggers = [];
-  const builder = (handlerFunctionName) => ({
-    timeBased: () => ({
-      everyHours: (n) => ({ create: () => { const t = { handlerFunctionName, type: 'hours', n }; triggers.push(t); return t; } }),
-      everyMinutes: (n) => ({ create: () => { const t = { handlerFunctionName, type: 'minutes', n }; triggers.push(t); return t; } })
-    })
-  });
+  const builder = (handlerFunctionName) => {
+    const makeTrigger = (type, n) => {
+      const t = { handlerFunctionName, type, n, getHandlerFunction: () => handlerFunctionName };
+      triggers.push(t);
+      return t;
+    };
+    return {
+      timeBased: () => ({
+        everyHours: (n) => ({ create: () => makeTrigger('hours', n) }),
+        everyMinutes: (n) => ({ create: () => makeTrigger('minutes', n) })
+      })
+    };
+  };
   return {
     newTrigger: (name) => builder(name),
     getProjectTriggers: () => triggers.slice(),

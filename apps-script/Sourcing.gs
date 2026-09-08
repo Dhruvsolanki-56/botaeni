@@ -112,6 +112,7 @@ function autoSourceLeads() {
     for (let r = 1; r < values.length; r++) {
       const row = values[r];
       if (!row[idx.category] || !row[idx.osm_tag] || !row[idx.location]) continue;
+      if (isSourceQueryDisabled_(row, idx)) continue;
       const lastRun = row[idx.last_run_at] ? new Date(row[idx.last_run_at]) : new Date(0);
       if (oldestRun === null || lastRun < oldestRun) {
         oldestRun = lastRun;
@@ -120,54 +121,118 @@ function autoSourceLeads() {
     }
     if (targetRow === -1) return { found: 0, reason: 'no_queries_configured' };
 
-    const row = values[targetRow];
-    const rowNumber = targetRow + 1;
-    const category = row[idx.category];
-    const osmTag = row[idx.osm_tag];
-    const location = row[idx.location];
-
-    try {
-      let areaId = row[idx.area_id];
-      if (!areaId) {
-        areaId = geocodeAreaId_(location);
-        setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'area_id', areaId);
-      }
-
-      const elements = queryOverpass_(osmTag, areaId);
-      const existingDomains = existingLeadDomains_();
-      let added = 0;
-      elements.forEach(function (el) {
-        const tags = el.tags || {};
-        const name = tags.name;
-        const website = tags.website || tags['contact:website'];
-        if (!name || !website) return; // no domain to classify or find a contact against
-        const domain = normalizeDomain_(website);
-        if (!domain || existingDomains.has(domain)) return;
-        existingDomains.add(domain);
-        appendRow_(SHEETS.RAW_LEADS, {
-          lead_id: generateLeadId_(name, website),
-          source: 'osm',
-          company_name: name,
-          website: website,
-          category: category,
-          address: formatOsmAddress_(tags, location),
-          phone: tags.phone || tags['contact:phone'] || '',
-          added_at: nowIso_(),
-          status: 'new'
-        });
-        added++;
-      });
-
-      setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'last_run_at', nowIso_());
-      setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'total_found', Number(row[idx.total_found] || 0) + added);
-      Logger.log('autoSourceLeads: found ' + added + ' new lead(s) for "' + category + '" in ' + location + '.');
-      return { found: added, category: category, location: location };
-    } catch (e) {
-      setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'last_run_at', nowIso_());
-      logError_('autoSourceLeads', e, { category: category, location: location });
-      return { found: 0, error: e.message };
-    }
+    return processSourceQueryRow_(idx, values[targetRow], targetRow + 1);
   });
+}
+
+/** The dashboard's per-row "Run now" button — forces one specific row immediately, ignoring the least-recently-run order (but not the enabled flag). */
+function runSourceQueryNow(rowNumber) {
+  return withLock_('autoSourceLeads', function () {
+    const sheet = getSheet_(SHEETS.SOURCE_QUERIES);
+    const values = sheet.getDataRange().getValues();
+    const idx = indexMap_(values[0]);
+    const row = values[rowNumber - 1];
+    if (!row) throw new Error('No SourceQueries row at ' + rowNumber + '.');
+    if (!row[idx.category] || !row[idx.osm_tag] || !row[idx.location]) {
+      throw new Error('Row ' + rowNumber + ' is missing category/osm_tag/location.');
+    }
+    if (isSourceQueryDisabled_(row, idx)) throw new Error('Row ' + rowNumber + ' is disabled — enable it first.');
+    return processSourceQueryRow_(idx, row, rowNumber);
+  });
+}
+
+function isSourceQueryDisabled_(row, idx) {
+  if (idx.enabled === undefined) return false;
+  return String(row[idx.enabled] || '').trim().toUpperCase() === 'FALSE';
+}
+
+function processSourceQueryRow_(idx, row, rowNumber) {
+  const category = row[idx.category];
+  const osmTag = row[idx.osm_tag];
+  const location = row[idx.location];
+
+  try {
+    let areaId = row[idx.area_id];
+    if (!areaId) {
+      areaId = geocodeAreaId_(location);
+      setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'area_id', areaId);
+    }
+
+    const elements = queryOverpass_(osmTag, areaId);
+    const existingDomains = existingLeadDomains_();
+    let added = 0;
+    elements.forEach(function (el) {
+      const tags = el.tags || {};
+      const name = tags.name;
+      const website = tags.website || tags['contact:website'];
+      if (!name || !website) return; // no domain to classify or find a contact against
+      const domain = normalizeDomain_(website);
+      if (!domain || existingDomains.has(domain)) return;
+      existingDomains.add(domain);
+      appendRow_(SHEETS.RAW_LEADS, {
+        lead_id: generateLeadId_(name, website),
+        source: 'osm',
+        company_name: name,
+        website: website,
+        category: category,
+        address: formatOsmAddress_(tags, location),
+        phone: tags.phone || tags['contact:phone'] || '',
+        added_at: nowIso_(),
+        status: 'new'
+      });
+      added++;
+    });
+
+    setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'last_run_at', nowIso_());
+    setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'total_found', Number(row[idx.total_found] || 0) + added);
+    Logger.log('autoSourceLeads: found ' + added + ' new lead(s) for "' + category + '" in ' + location + '.');
+    return { found: added, category: category, location: location };
+  } catch (e) {
+    setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'last_run_at', nowIso_());
+    logError_('autoSourceLeads', e, { category: category, location: location });
+    return { found: 0, error: e.message };
+  }
+}
+
+/** Dashboard-facing: every configured target, with row numbers so the UI can edit/toggle/delete a specific one. */
+function listSourceQueries() {
+  return readSheetAsObjects_(SHEETS.SOURCE_QUERIES);
+}
+
+/** Dashboard "Add target" form. */
+function addSourceQuery(category, osmTag, location) {
+  category = (category || '').toString().trim();
+  osmTag = (osmTag || '').toString().trim();
+  location = (location || '').toString().trim();
+  if (!category || !osmTag || !location) throw new Error('category, osm_tag, and location are all required.');
+  appendRow_(SHEETS.SOURCE_QUERIES, { category: category, osm_tag: osmTag, location: location, enabled: 'TRUE' });
+  return listSourceQueries();
+}
+
+/** Dashboard per-row enable/disable toggle. */
+function setSourceQueryEnabled(rowNumber, enabled) {
+  setCell_(SHEETS.SOURCE_QUERIES, rowNumber, 'enabled', enabled ? 'TRUE' : 'FALSE');
+  return listSourceQueries();
+}
+
+/** Dashboard bulk "target all" / "pause all" buttons. */
+function setAllSourceQueriesEnabled(enabled) {
+  const sheet = getSheet_(SHEETS.SOURCE_QUERIES);
+  const values = sheet.getDataRange().getValues();
+  const idx = indexMap_(values[0]);
+  if (idx.enabled !== undefined) {
+    for (let r = 1; r < values.length; r++) {
+      if (!values[r][idx.category]) continue;
+      sheet.getRange(r + 1, idx.enabled + 1).setValue(enabled ? 'TRUE' : 'FALSE');
+    }
+  }
+  return listSourceQueries();
+}
+
+/** Dashboard "remove target" button. */
+function deleteSourceQueryRow(rowNumber) {
+  getSheet_(SHEETS.SOURCE_QUERIES).deleteRow(rowNumber);
+  return listSourceQueries();
 }
 
 function existingLeadDomains_() {

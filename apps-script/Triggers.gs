@@ -44,3 +44,25 @@ function installAllTriggersSingleAccount() {
 function deleteAllTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
 }
+
+/** Dashboard's automation status tile — also what "Start"/"Stop" checks after acting, to confirm it actually took. */
+function getAutomationStatus() {
+  const triggers = ScriptApp.getProjectTriggers();
+  return {
+    running: triggers.length > 0,
+    triggerCount: triggers.length,
+    triggerNames: triggers.map(function (t) { return t.getHandlerFunction(); }).sort()
+  };
+}
+
+/** Dashboard "Start automation" button — single-account setup (see installAllTriggersSingleAccount's comment). */
+function startAutomation() {
+  installAllTriggersSingleAccount();
+  return getAutomationStatus();
+}
+
+/** Dashboard "Stop automation" button. Sourcing, classification, sending — everything pauses; nothing already queued is lost. */
+function stopAutomation() {
+  deleteAllTriggers();
+  return getAutomationStatus();
+}

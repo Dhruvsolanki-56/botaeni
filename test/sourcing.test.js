@@ -251,3 +251,102 @@ test('autoSourceLeads falls back to the next Overpass mirror when the first one 
   assert.equal(result.found, 1, 'should succeed via the second mirror after the first one 406s');
   assert.equal(context.readSheetAsObjects_('RawLeads')[0].company_name, 'Acme Bakery');
 });
+
+test('autoSourceLeads skips rows disabled from the dashboard', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India', enabled: 'FALSE' });
+  context.appendRow_('SourceQueries', { category: 'Cafe', osm_tag: 'amenity=cafe', location: 'Ahmedabad, India', enabled: 'TRUE' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.category, 'Cafe', 'the disabled Bakery row should be skipped entirely');
+});
+
+test('autoSourceLeads treats a blank enabled cell as enabled (existing rows before the column was added)', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(overpassElements([])) };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+
+  const result = context.autoSourceLeads();
+
+  assert.equal(result.category, 'Bakery');
+});
+
+test('runSourceQueryNow forces a specific row immediately, ignoring last-run order', () => {
+  const { context } = createEnv({
+    fetchHandler: (url) => {
+      if (url.indexOf('nominatim') !== -1) return { getResponseCode: () => 200, getContentText: () => JSON.stringify(nominatimResult()) };
+      return {
+        getResponseCode: () => 200,
+        getContentText: () => JSON.stringify(overpassElements([{ tags: { name: 'Cafe Co', website: 'https://cafeco.com' } }]))
+      };
+    }
+  });
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+  context.appendRow_('SourceQueries', { category: 'Cafe', osm_tag: 'amenity=cafe', location: 'Ahmedabad, India', last_run_at: new Date().toISOString() });
+
+  const result = context.runSourceQueryNow(3); // row 1 is the header, row 2 Bakery, row 3 Cafe
+
+  assert.equal(result.category, 'Cafe', 'should run the requested row even though it ran most recently');
+});
+
+test('runSourceQueryNow refuses a disabled row', () => {
+  const { context } = createEnv();
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India', enabled: 'FALSE' });
+
+  assert.throws(() => context.runSourceQueryNow(2), /disabled/);
+});
+
+test('listSourceQueries / addSourceQuery / setSourceQueryEnabled / deleteSourceQueryRow round-trip', () => {
+  const { context } = createEnv();
+  context.setupSheets();
+
+  context.addSourceQuery('Bakery', 'shop=bakery', 'Ahmedabad, India');
+  let rows = context.listSourceQueries();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].category, 'Bakery');
+  assert.equal(rows[0].enabled, 'TRUE');
+
+  context.setSourceQueryEnabled(rows[0]._rowNumber, false);
+  rows = context.listSourceQueries();
+  assert.equal(rows[0].enabled, 'FALSE');
+
+  context.deleteSourceQueryRow(rows[0]._rowNumber);
+  rows = context.listSourceQueries();
+  assert.equal(rows.length, 0);
+});
+
+test('addSourceQuery rejects a missing field instead of writing a half-empty row', () => {
+  const { context } = createEnv();
+  context.setupSheets();
+  assert.throws(() => context.addSourceQuery('', 'shop=bakery', 'Ahmedabad, India'), /required/);
+  assert.equal(context.listSourceQueries().length, 0);
+});
+
+test('setAllSourceQueriesEnabled toggles every configured row at once', () => {
+  const { context } = createEnv();
+  context.setupSheets();
+  context.appendRow_('SourceQueries', { category: 'Bakery', osm_tag: 'shop=bakery', location: 'Ahmedabad, India' });
+  context.appendRow_('SourceQueries', { category: 'Cafe', osm_tag: 'amenity=cafe', location: 'Ahmedabad, India' });
+
+  context.setAllSourceQueriesEnabled(false);
+  let rows = context.listSourceQueries();
+  assert.ok(rows.every((r) => r.enabled === 'FALSE'));
+
+  context.setAllSourceQueriesEnabled(true);
+  rows = context.listSourceQueries();
+  assert.ok(rows.every((r) => r.enabled === 'TRUE'));
+});

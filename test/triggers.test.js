@@ -37,3 +37,36 @@ test('installAllTriggersSingleAccount installs all eight jobs and clears old one
   const names = context.ScriptApp._triggers().map((t) => t.handlerFunctionName).sort();
   assert.deepEqual(names, ['autoSourceLeads', 'checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts', 'sendQueue'].sort());
 });
+
+test('getAutomationStatus reports stopped when no triggers exist', () => {
+  const { context } = createEnv();
+  const status = context.getAutomationStatus();
+  assert.equal(status.running, false);
+  assert.equal(status.triggerCount, 0);
+});
+
+test('getAutomationStatus reports running with the installed trigger names once triggers exist', () => {
+  const { context } = createEnv();
+  context.installAllTriggersSingleAccount();
+
+  const status = context.getAutomationStatus();
+
+  assert.equal(status.running, true);
+  assert.equal(status.triggerCount, 8);
+  assert.deepEqual(Array.from(status.triggerNames), ['autoSourceLeads', 'checkReplies', 'classifyLeads', 'draftEmails', 'findContacts', 'normalizeRawLeads', 'queueApprovedDrafts', 'sendQueue'].sort());
+});
+
+test('the dashboard\'s startAutomation installs every trigger and returns the resulting status', () => {
+  const { context } = createEnv();
+  const status = context.startAutomation();
+  assert.equal(status.running, true);
+  assert.equal(status.triggerCount, 8);
+});
+
+test('the dashboard\'s stopAutomation removes every trigger and returns the resulting status', () => {
+  const { context } = createEnv();
+  context.installAllTriggersSingleAccount();
+  const status = context.stopAutomation();
+  assert.equal(status.running, false);
+  assert.equal(status.triggerCount, 0);
+});
